@@ -1,10 +1,11 @@
+import os
 import sqlite3
 from datetime import date as date_type
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-DB_PATH = Path(__file__).parent / "gym.db"
+DB_PATH = Path(os.environ.get("GYMLOG_DB_DIR", Path(__file__).parent)) / "gym.db"
 
 mcp = FastMCP("gymlog")
 
@@ -152,6 +153,22 @@ def replace_day(week: str, day: int, exercises: list[dict]) -> str:
     conn.close()
     return f"Week {week} day {day} replaced with {len(exercises)} exercises."
 
+@mcp.tool()
+def exercise_history(exercise: str, limit: int = 20) -> str:
+    """Get recent logged sets for a single exercise across all dates,
+    newest first. Use when asked about procress, trends, or PRs for 
+    a specific lift (e.g "how's my squat coming along?")."""
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        """SELECT date, weight_kg, reps FROM sets
+            WHERE exercise = ? COLLATE NOCASE
+            ORDER BY date DESC LIMIT ?""",
+        (exercise, limit),
+    ).fetchall()
+    conn.close()
+    if not rows:
+        return f"No logged sets found for {exercise!r}."
+    return "\n".join(f"{d}: {w}kg x {r}" for d, w, r in rows)
 
 if __name__ == "__main__":
     mcp.run()
